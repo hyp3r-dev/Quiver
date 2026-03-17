@@ -24,6 +24,11 @@ let package = Package(
             name: "QUICCore",
             targets: ["QUICCore"]
         ),
+        // TLS/Crypto (exposed for downstream TLS13Handler access)
+        .library(
+            name: "QUICCrypto",
+            targets: ["QUICCrypto"]
+        ),
         // QPACK header compression (RFC 9204)
         .library(
             name: "QPACK",
