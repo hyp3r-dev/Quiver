@@ -4,6 +4,7 @@
 
 import Foundation
 import QUICCore
+import QUICStream
 
 // MARK: - QUIC Connection Protocol
 
@@ -43,6 +44,9 @@ public protocol QUICConnectionProtocol: Sendable {
 
     /// Opens a new bidirectional stream
     func openStream() async throws -> any QUICStreamProtocol
+
+    /// Opens a new bidirectional stream with a priority hint (RFC 9218)
+    func openStream(priority: StreamPriority) async throws -> any QUICStreamProtocol
 
     /// Opens a new unidirectional stream
     func openUniStream() async throws -> any QUICStreamProtocol
