@@ -39,6 +39,11 @@ let package = Package(
             name: "HTTP3",
             targets: ["HTTP3"]
         ),
+        // Stream management types (StreamPriority, etc.)
+        .library(
+            name: "QUICStream",
+            targets: ["QUICStream"]
+        ),
         // Example: QUIC Echo Server/Client
         .executable(
             name: "QUICEchoServer",
