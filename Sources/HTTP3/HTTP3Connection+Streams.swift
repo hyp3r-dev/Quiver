@@ -53,25 +53,25 @@ extension HTTP3Connection {
     /// Bidirectional streams are request streams. Unidirectional streams
     /// are classified by their stream type byte and routed accordingly.
     func processIncomingStreams(from connection: any QUICConnectionProtocol) async {
-        Self.logger.debug("processIncomingStreams started (role=\(role))")
+        Self.logger.info("processIncomingStreams started (role=\(role))")
         for await stream in connection.incomingStreams {
-            Self.logger.trace("Received incoming stream id=\(stream.id), isUni=\(stream.isUnidirectional) (role=\(role))")
+            Self.logger.info("Received incoming stream id=\(stream.id), isUni=\(stream.isUnidirectional) (role=\(role))")
             if stream.isUnidirectional {
                 Task { [weak self] in
-                    Self.logger.trace("handleIncomingUniStream task starting for stream \(stream.id)")
+                    Self.logger.info("handleIncomingUniStream task starting for stream \(stream.id)")
                     await self?.handleIncomingUniStream(stream)
-                    Self.logger.trace("handleIncomingUniStream task finished for stream \(stream.id)")
+                    Self.logger.info("handleIncomingUniStream task finished for stream \(stream.id)")
                 }
             } else {
                 // Bidirectional stream — could be HTTP/3 request or WebTransport bidi
                 Task { [weak self] in
-                    Self.logger.trace("handleIncomingBidiStream task starting for stream \(stream.id)")
+                    Self.logger.info("handleIncomingBidiStream task starting for stream \(stream.id)")
                     await self?.handleIncomingBidiStream(stream)
-                    Self.logger.trace("handleIncomingBidiStream task finished for stream \(stream.id)")
+                    Self.logger.info("handleIncomingBidiStream task finished for stream \(stream.id)")
                 }
             }
         }
-        Self.logger.debug("processIncomingStreams ended (role=\(role))")
+        Self.logger.info("processIncomingStreams ended (role=\(role))")
     }
 
     // MARK: - Unidirectional Stream Handling
@@ -381,32 +381,39 @@ extension HTTP3Connection {
     /// the first varint and checking if it matches a known active
     /// WebTransport session ID.
     func handleIncomingBidiStream(_ stream: any QUICStreamProtocol) async {
+        Self.logger.info("handleIncomingBidiStream: stream \(stream.id), wtSessions=\(webTransportSessions.count)")
         // If no WebTransport sessions are active, fast-path to HTTP/3 request handling
         guard !webTransportSessions.isEmpty else {
+            Self.logger.info("handleIncomingBidiStream: no WT sessions, routing to HTTP/3 request")
             await handleIncomingRequestStream(stream)
             return
         }
 
         // Read the first chunk of data from the stream
+        Self.logger.info("handleIncomingBidiStream: reading first data from stream \(stream.id)...")
         let firstData: Data
         do {
             firstData = try await stream.read()
         } catch {
+            Self.logger.info("handleIncomingBidiStream: read error for stream \(stream.id): \(error)")
             return
         }
         guard !firstData.isEmpty else {
+            Self.logger.info("handleIncomingBidiStream: empty data for stream \(stream.id)")
             return
         }
+        Self.logger.info("handleIncomingBidiStream: read \(firstData.count) bytes from stream \(stream.id), first bytes: \(Array(firstData.prefix(16)))")
 
         // Try to decode the first varint — this is either a WT session ID
         // or an HTTP/3 frame type
         do {
             let (varint, consumed) = try Varint.decode(from: firstData)
             let candidateSessionID = varint.value
+            Self.logger.info("handleIncomingBidiStream: varint=\(candidateSessionID), consumed=\(consumed), registeredIDs=\(Array(webTransportSessions.keys))")
 
             // Check if this matches a known WebTransport session
             if let session = webTransportSessions[candidateSessionID] {
-                Self.logger.debug("handleIncomingBidiStream: stream \(stream.id) matched WebTransport session \(candidateSessionID)")
+                Self.logger.info("handleIncomingBidiStream: stream \(stream.id) matched WebTransport session \(candidateSessionID)")
                 let remaining: Data
                 if consumed < firstData.count {
                     remaining = Data(firstData.dropFirst(consumed))
@@ -416,12 +423,14 @@ extension HTTP3Connection {
                 await session.deliverIncomingBidirectionalStream(stream, initialData: remaining)
                 return
             }
+            Self.logger.info("handleIncomingBidiStream: varint \(candidateSessionID) did not match any WT session")
         } catch {
-            // Varint decode failed — treat as HTTP/3 request stream
+            Self.logger.info("handleIncomingBidiStream: varint decode failed: \(error)")
         }
 
         // Not a WebTransport stream — handle as HTTP/3 request stream
         // with the already-read data as a prefix buffer
+        Self.logger.info("handleIncomingBidiStream: routing stream \(stream.id) to HTTP/3 request handler")
         await handleIncomingRequestStreamWithBuffer(stream, initialBuffer: firstData)
     }
 }
