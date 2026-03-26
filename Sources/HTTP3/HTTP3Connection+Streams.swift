@@ -55,23 +55,23 @@ extension HTTP3Connection {
     func processIncomingStreams(from connection: any QUICConnectionProtocol) async {
         Self.logger.debug("processIncomingStreams started (role=\(role))")
         for await stream in connection.incomingStreams {
-            Self.logger.info("Received incoming stream id=\(stream.id), isUni=\(stream.isUnidirectional) (role=\(role))")
+            Self.logger.debug("Received incoming stream id=\(stream.id), isUni=\(stream.isUnidirectional) (role=\(role))")
             if stream.isUnidirectional {
                 Task { [weak self] in
-                    Self.logger.info("handleIncomingUniStream task starting for stream \(stream.id)")
+                    Self.logger.debug("handleIncomingUniStream task starting for stream \(stream.id)")
                     await self?.handleIncomingUniStream(stream)
-                    Self.logger.info("handleIncomingUniStream task finished for stream \(stream.id)")
+                    Self.logger.debug("handleIncomingUniStream task finished for stream \(stream.id)")
                 }
             } else {
                 // Bidirectional stream — could be HTTP/3 request or WebTransport bidi
                 Task { [weak self] in
-                    Self.logger.info("handleIncomingBidiStream task starting for stream \(stream.id)")
+                    Self.logger.debug("handleIncomingBidiStream task starting for stream \(stream.id)")
                     await self?.handleIncomingBidiStream(stream)
-                    Self.logger.info("handleIncomingBidiStream task finished for stream \(stream.id)")
+                    Self.logger.debug("handleIncomingBidiStream task finished for stream \(stream.id)")
                 }
             }
         }
-        Self.logger.info("processIncomingStreams ended (role=\(role))")
+        Self.logger.debug("processIncomingStreams ended (role=\(role))")
     }
 
     // MARK: - Unidirectional Stream Handling
@@ -199,7 +199,7 @@ extension HTTP3Connection {
             throw HTTP3Error.missingSettings
         }
 
-        Self.logger.info("handleIncomingControlStream: received peer SETTINGS: \(settings)")
+        Self.logger.debug("handleIncomingControlStream: received peer SETTINGS: \(settings)")
         peerSettings = settings
 
         // Transition to ready state
@@ -422,20 +422,20 @@ extension HTTP3Connection {
             // draft-09: first varint is stream type 0x41, session ID follows
             if sessionID == Self.kWebTransportBidiStreamType {
                 let rest = firstData.dropFirst(firstConsumed)
-                Self.logger.info("handleIncomingBidiStream: detected 0x41 stream type, rest=\(rest.count) bytes")
+                Self.logger.debug("handleIncomingBidiStream: detected 0x41 stream type, rest=\(rest.count) bytes")
                 if !rest.isEmpty {
                     let (sessionVarint, sessionConsumed) = try Varint.decode(from: Data(rest))
                     sessionID = sessionVarint.value
                     totalConsumed = firstConsumed + sessionConsumed
-                    Self.logger.info("handleIncomingBidiStream: decoded sessionID=\(sessionID), totalConsumed=\(totalConsumed)")
+                    Self.logger.debug("handleIncomingBidiStream: decoded sessionID=\(sessionID), totalConsumed=\(totalConsumed)")
                 }
             }
 
-            Self.logger.info("handleIncomingBidiStream: looking up sessionID=\(sessionID) in \(Array(webTransportSessions.keys))")
+            Self.logger.debug("handleIncomingBidiStream: looking up sessionID=\(sessionID) in \(Array(webTransportSessions.keys))")
 
             // Check if this matches a known WebTransport session
             if let session = webTransportSessions[sessionID] {
-                Self.logger.info("handleIncomingBidiStream: MATCHED session \(sessionID), delivering stream \(stream.id)")
+                Self.logger.debug("handleIncomingBidiStream: MATCHED session \(sessionID), delivering stream \(stream.id)")
                 let remaining: Data
                 if totalConsumed < firstData.count {
                     remaining = Data(firstData.dropFirst(totalConsumed))
