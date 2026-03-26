@@ -422,16 +422,20 @@ extension HTTP3Connection {
             // draft-09: first varint is stream type 0x41, session ID follows
             if sessionID == Self.kWebTransportBidiStreamType {
                 let rest = firstData.dropFirst(firstConsumed)
+                Self.logger.info("handleIncomingBidiStream: detected 0x41 stream type, rest=\(rest.count) bytes")
                 if !rest.isEmpty {
                     let (sessionVarint, sessionConsumed) = try Varint.decode(from: Data(rest))
                     sessionID = sessionVarint.value
                     totalConsumed = firstConsumed + sessionConsumed
+                    Self.logger.info("handleIncomingBidiStream: decoded sessionID=\(sessionID), totalConsumed=\(totalConsumed)")
                 }
             }
 
+            Self.logger.info("handleIncomingBidiStream: looking up sessionID=\(sessionID) in \(Array(webTransportSessions.keys))")
+
             // Check if this matches a known WebTransport session
             if let session = webTransportSessions[sessionID] {
-                Self.logger.debug("handleIncomingBidiStream: stream \(stream.id) matched WebTransport session \(sessionID)")
+                Self.logger.info("handleIncomingBidiStream: MATCHED session \(sessionID), delivering stream \(stream.id)")
                 let remaining: Data
                 if totalConsumed < firstData.count {
                     remaining = Data(firstData.dropFirst(totalConsumed))

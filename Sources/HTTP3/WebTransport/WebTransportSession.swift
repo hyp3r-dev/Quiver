@@ -637,6 +637,7 @@ public actor WebTransportSession {
         _ quicStream: any QUICStreamProtocol,
         initialData: Data = Data()
     ) {
+        Self.logger.info("deliverIncomingBidirectionalStream: streamID=\(quicStream.id), state=\(state), hasContinuation=\(incomingBidiContinuation != nil)")
         guard state == .established || state == .draining else {
             Task {
                 await quicStream.reset(
