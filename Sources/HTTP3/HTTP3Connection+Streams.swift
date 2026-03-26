@@ -53,6 +53,7 @@ extension HTTP3Connection {
     /// Bidirectional streams are request streams. Unidirectional streams
     /// are classified by their stream type byte and routed accordingly.
     func processIncomingStreams(from connection: any QUICConnectionProtocol) async {
+        print("[DIAG-STREAMS] processIncomingStreams STARTED role=\(role)")
         Self.logger.info("processIncomingStreams started (role=\(role))")
         for await stream in connection.incomingStreams {
             Self.logger.info("Received incoming stream id=\(stream.id), isUni=\(stream.isUnidirectional) (role=\(role))")
@@ -381,6 +382,7 @@ extension HTTP3Connection {
     /// the first varint and checking if it matches a known active
     /// WebTransport session ID.
     func handleIncomingBidiStream(_ stream: any QUICStreamProtocol) async {
+        print("[DIAG-STREAMS] handleIncomingBidiStream stream=\(stream.id) wtSessions=\(webTransportSessions.count)")
         Self.logger.info("handleIncomingBidiStream: stream \(stream.id), wtSessions=\(webTransportSessions.count)")
         // If no WebTransport sessions are active, fast-path to HTTP/3 request handling
         guard !webTransportSessions.isEmpty else {

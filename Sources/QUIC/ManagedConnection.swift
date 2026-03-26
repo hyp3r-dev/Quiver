@@ -1218,6 +1218,7 @@ public final class ManagedConnection: Sendable {
         // Handle new peer-initiated streams
         let scidForDebug = state.withLock { $0.sourceConnectionID }
         if !result.newStreams.isEmpty {
+            print("[DIAG-QUIC] \(result.newStreams.count) NEW STREAMS: \(result.newStreams) SCID=\(scidForDebug)")
             Self.logger.info("processFrameResult: \(result.newStreams.count) new streams: \(result.newStreams) for SCID=\(scidForDebug)")
         }
         for streamID in result.newStreams {
