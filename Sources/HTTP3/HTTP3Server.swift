@@ -775,7 +775,8 @@ public actor HTTP3Server {
                 let session = WebTransportSession(
                     connectStream: context.stream,
                     connection: h3Connection,
-                    role: .server
+                    role: .server,
+                    connectRequest: context.request
                 )
 
                 guard await h3Connection.tryRegisterWebTransportSession(session) else {

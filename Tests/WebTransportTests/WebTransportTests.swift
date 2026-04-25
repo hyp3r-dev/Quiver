@@ -16,6 +16,8 @@ import Synchronization
 @testable import QUICCore
 @testable import QPACK
 @testable import QUIC
+@testable import QUICStream
+@testable import QUICCrypto
 
 // MARK: - Mock Types for WebTransport Testing
 
@@ -212,6 +214,10 @@ private final class MockWTConnection: QUICConnectionProtocol, @unchecked Sendabl
         }
     }
 
+    func openStream(priority: StreamPriority) async throws -> any QUICStreamProtocol {
+        try await openStream()
+    }
+
     func openUniStream() async throws -> any QUICStreamProtocol {
         state.withLock { s in
             let id = s.nextUniStreamID
@@ -228,6 +234,10 @@ private final class MockWTConnection: QUICConnectionProtocol, @unchecked Sendabl
 
     var incomingDatagrams: AsyncStream<Data> {
         _incomingDatagrams
+    }
+
+    var sessionTickets: AsyncStream<NewSessionTicketInfo> {
+        AsyncStream { $0.finish() }
     }
 
     func sendDatagram(_ data: Data) async throws {
@@ -1684,7 +1694,7 @@ final class HTTP3ConnectionSessionRegistryTests: XCTestCase {
         )
 
         let connectStream = MockWTStream(id: 0)
-        let response = HTTP3Response(status: 200)
+        let response = HTTP3ResponseHead(status: 200)
 
         let session = try await h3Conn.createClientWebTransportSession(
             connectStream: connectStream,
@@ -1714,7 +1724,7 @@ final class HTTP3ConnectionSessionRegistryTests: XCTestCase {
         )
 
         let connectStream = MockWTStream(id: 0)
-        let response = HTTP3Response(status: 403)
+        let response = HTTP3ResponseHead(status: 403)
 
         do {
             _ = try await h3Conn.createClientWebTransportSession(
@@ -1953,60 +1963,46 @@ final class WebTransportClientTests: XCTestCase {
 final class WebTransportServerTests: XCTestCase {
 
     func testServerCreation() async {
-        let server = WebTransportServer()
+        let server = WebTransportServer(
+            configuration: WebTransportConfiguration(quic: .testing())
+        )
 
         let state = await server.state
         XCTAssertEqual(state, .idle)
 
         let isListening = await server.isListening
         XCTAssertFalse(isListening)
-
-        let totalSessions = await server.totalSessions
-        XCTAssertEqual(totalSessions, 0)
     }
 
     func testServerWithCustomConfiguration() async {
-        let config = WebTransportServer.Configuration(
-            maxSessionsPerConnection: 10,
-            maxConnections: 100,
-            allowedPaths: ["/wt", "/echo"]
+        let server = WebTransportServer(
+            configuration: WebTransportConfiguration(quic: .testing(), maxSessions: 10),
+            serverOptions: WebTransportServer.ServerOptions(
+                maxConnections: 100,
+                allowedPaths: ["/wt", "/echo"]
+            )
         )
-        let server = WebTransportServer(configuration: config)
 
-        let maxSessions = await server.configuration.maxSessionsPerConnection
+        let maxSessions = await server.configuration.maxSessions
         XCTAssertEqual(maxSessions, 10)
 
-        let paths = await server.configuration.allowedPaths
+        let paths = await server.serverOptions.allowedPaths
         XCTAssertEqual(paths, ["/wt", "/echo"])
     }
 
-    func testServerConvenienceInit() async {
-        let server = WebTransportServer(maxSessions: 5, maxConnections: 50)
-
-        let maxSessions = await server.configuration.maxSessionsPerConnection
-        XCTAssertEqual(maxSessions, 5)
-
-        let maxConns = await server.configuration.maxConnections
-        XCTAssertEqual(maxConns, 50)
-    }
-
     func testServerDebugDescription() async {
-        let server = WebTransportServer(maxSessions: 3)
+        let server = WebTransportServer(
+            configuration: WebTransportConfiguration(quic: .testing(), maxSessions: 3)
+        )
 
         let desc = await server.debugDescription
         XCTAssertTrue(desc.contains("idle"))
-        XCTAssertTrue(desc.contains("3"))
-    }
-
-    func testServerDefaultConfiguration() async {
-        let config = WebTransportServer.Configuration.default
-        XCTAssertEqual(config.maxSessionsPerConnection, 1)
-        XCTAssertEqual(config.maxConnections, 0)
-        XCTAssertTrue(config.allowedPaths.isEmpty)
     }
 
     func testServerStartWithoutIdle() async {
-        let server = WebTransportServer()
+        let server = WebTransportServer(
+            configuration: WebTransportConfiguration(quic: .testing())
+        )
 
         // Force to listening state first via serveConnection, then try serve
         // Actually, we can test the guard directly by trying to serve twice
@@ -2151,8 +2147,7 @@ final class WebTransportSessionQuotaTests: XCTestCase {
         if maxSessions > 0 && activeCount >= Int(maxSessions) {
             try await context.reject(
                 status: 429,
-                headers: [("content-type", "text/plain")],
-                body: Data("Too many WebTransport sessions".utf8)
+                headers: [("content-type", "text/plain")]
             )
         }
 
