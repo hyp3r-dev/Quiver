@@ -44,6 +44,11 @@ let package = Package(
             name: "QUICStream",
             targets: ["QUICStream"]
         ),
+        // Loss detection and congestion control algorithms
+        .library(
+            name: "QUICRecovery",
+            targets: ["QUICRecovery"]
+        ),
         // Example: QUIC Echo Server/Client
         .executable(
             name: "QUICEchoServer",
